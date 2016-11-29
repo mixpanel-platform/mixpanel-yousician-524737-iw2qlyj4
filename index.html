@@ -1,15 +1,167 @@
 <!DOCTYPE html>
+
+<!--       This is not a Mixpanel product, nor has it gone through a formal review process.
+      Please be careful making any decisions based on this code; we are not responsible for the results. -->
+
 <html>
   <head>
+    <style>
+      td {
+         width: 200px;
+         font-weight: normal;
+      }
+      th {
+        text-align: left;
+        font-weight: bold;
+      }
+    </style>
     <meta charset="utf-8">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <div>Api Secret:</div><div><input id='api-secret' size='35' value='No need to change if already in project'></div>
+    <div>Number of Days:</div><div><input id='num-days' value='7' size='10'></div>
+    <div><button onclick='display()'>Display Spec</button><button onclick='download()'>Download CSV</button></div>
+    <div id='display'></div>
     <script>
-      // Run queries and display results here
+    function display() {
+      var secret = document.getElementById('api-secret').value;
+      var numDays = Number(document.getElementById('num-days').value);
+      if (secret.indexOf(' ') == -1)
+        changeCredentials(secret);
+      displaySpec(numDays);
+    }
+
+    function download() {
+      var secret = document.getElementById('api-secret').value;
+      var numDays = Number(document.getElementById('num-days').value);
+      if (secret.indexOf(' ') == -1)
+        changeCredentials(secret);
+      downloadCSV(numDays);
+    }
+
+    function changeCredentials(api_secret) {
+      MP.api.setCredentials(api_secret);
+    }
+
+    function displaySpec(numDays) {
+      var script = $('#jql-query').html();
+      MP.api.jql(script, {numDays: numDays}).done(function(res) {
+        if (res[0]) {
+          res = res[0];
+          var table = '<table><tr><th>Event</th><th>Property</th><th>Count</th><th>Percentage</th></tr><tr><td>';
+          for (var i = 0; i < res.length; i++) {
+            if (res[i] == ',')
+              table += '</td><td>';
+            else if (res[i] == '~')
+              table += '</td></tr><tr><td>'
+            else
+              table += res[i];
+          }
+          table += '</td></tr></table>';
+          document.getElementById('display').innerHTML = table;
+        }
+        else
+          console.log('Query retuned nothing');
+      });
+    }
+
+    function downloadCSV(numDays) {
+      var script = $('#jql-query').html();
+      MP.api.jql(script, {numDays: numDays}).done(function(res) {
+        if (res[0]) {
+          res = res[0];
+          var csvData = 'Event,Property,Count,Percentage\n';
+          for (var i = 0; i < res.length; i++)
+            csvData = res[i] == '~'? csvData + '\n': csvData + res[i];
+          if (!csvData.match(/^data:text\/csv/i))
+            csvData = 'data:text/csv;charset=utf-8,' + csvData;
+          var fileName = 'spec_export.csv';
+          var data = encodeURI(csvData);
+          link = document.createElement('a');
+          link.setAttribute('href', data);
+          link.setAttribute('download', fileName);
+          link.click();
+        }
+        else
+          console.log('Query returned nothing');
+      });
+    }
+    </script>
+
+    <script id='jql-query'>
+      var defaultProperties = {"$city":true,"$region":true,"mp_country_code":true,"$brand":true,"$bluetooth_version":true,"$device":true,"$os":true,"$app_release":true,"$app_version":true,"$carrier":true,"$lib_version":true,"$wifi":true,"$screen_width":true,"$screen_height":true,"$model":true,"$os_version":true,"$manufacturer":true,"$screen_dpi":true,"$has_telephone":true,"has_nfc":true,"$bluetooth_enabled":true,"$browser":true,"$initial_referrer":true,"$initial_referring_domain":true,"$referrer":true,"$referring_domain":true,"$browser_version":true,"mp_keyword":true,"$search_engine":true,"utm_source":true,"utm_medium":true,"utm_campaign":true,"utm_content":true,"utm_term":true,"$radio":true,"mp_device_model":true,"$google_play_services":true,"mp_lib":true,"campaign_id":true,"message_id":true,"message_subtype":true,"message_type":true,"$answer_count":true,"survey_id":true,"collection_id":true,"$survey_shown":true,"$watch_model":true,"$ios_ifa":true,"$current_url":true,"$duration":true,"$from_binding":true,"$experiments":true,"$import":true,"distinct_id":true,"time":true,"$has_nfc":true};
+
+      var defaultPeopleProperties = {"$city":true,"$region":true,"$mp_country_code":true,"$timezone":true,"$browser_version":true,"$browser":true,"$initial_referrer":true,"$initial_referring_domain":true,"$os":true,"$last_seen":true,"$ios_app_release":true,"$ios_app_version":true,"$ios_device_model":true,"$ios_lib_version":true,"$ios_version":true,"$ios_ifa":true,"$android_app_version":true,"$android_app_version_code":true,"$android_lib_version":true,"$android_os":true,"$android_os_version":true,"$android_brand":true,"$android_model":true,"$android_manufacturer":true};
+
+      var defaultEvents = {'$campaign_delivery':true, '$campaign_marked_spam':true, '$campaign_bounced':true, '$campaign_open':true, '$experiment_started':true, '$show_survey':true};
+
+      function main() {
+        var from_date = new Date(new Date().valueOf() - (params.numDays -1)*24*60*60*1000).toISOString().slice(0,-14);
+        var to_date = new Date().toISOString().slice(0,-14);
+        var events = Events({from_date: from_date, to_date: to_date});
+        return join(events, People())
+        .groupByUser(function(state, items) {
+          state = state || {};
+          var stateUpdate = function(item) {
+            if (item.event && !defaultEvents[item.event]) {
+              state[item.event.name] = state[item.event.name] || {};
+              state[item.event.name].Total = state[item.event.name].Total + 1 || 1;
+              _.each(item.event.properties, function(val, prop) {
+                if (!defaultProperties[prop])
+                  state[item.event.name][prop] = state[item.event.name][prop] + 1 || 1;
+              });
+            }
+            if (item.user) {
+              state['People Properties'] = state['People Properties'] || {};
+              state['People Properties'].Total = 1;
+              _.each(item.user.properties, function(val, prop) {
+                if (!defaultPeopleProperties[prop])
+                  state['People Properties'][prop] = 1;
+              });
+            }
+          };
+          _.each(items, stateUpdate);
+          return state;
+        })
+        .map(function(state) {
+          return state.value;
+        })
+        .reduce(mixpanel.reducer.object_merge())
+        .map(function(result) {
+          var res = [];
+          _.each(result, function(summary_obj, event) {
+            var row = [];
+            var total = summary_obj.Total;
+            _.each(summary_obj, function(count, prop) {
+              if (prop != 'Total')
+                row.push({label: prop, total: count, ratio: count / total, type: 'Property'});
+            });
+            row = _.sortBy(row, function(cell) {return -1 * cell.total});
+            row.unshift({label: event, total: summary_obj.Total, ratio: summary_obj.Total / total, type: 'Event'});
+            res.push(row);
+          });
+          res = _.sortBy(res, function(event_list) {
+            if (event_list[0].label == 'People Properties')
+              return 0;
+            return -1 * event_list[0].total;
+          });
+          res = _.flatten(res);
+          return res;
+        })
+        .map(function(res) {
+          var result = '';
+          _.each(res, function(obj) {
+            if (obj.type == 'Event')
+              result += obj.label + ',,' + obj.total + ',' + (100 * obj.ratio) + '~';
+            else if (obj.type == 'Property')
+              result += ',' + obj.label + ',' + obj.total + ',' + (100 * obj.ratio) + '~';
+          });
+          return result;
+        });
+      }
     </script>
   </body>
 </html>
